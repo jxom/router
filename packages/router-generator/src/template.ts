@@ -239,7 +239,7 @@ export function getTargetTemplate(config: Config): TargetTemplate {
             tsrExportStart: () => 'export const Route = createRootRoute(',
             tsrExportEnd: () => ');',
             tsrComponent: ({ routePath }) =>
-              `function RootComponent() { return h("div", {}, "Hello \\"${routePath}\\"!") }`,
+              `function RootComponent() { return h("div", {}, ["Hello \\"%%tsrPath%%\\"!", h(Outlet)]) }`,
           },
         },
         route: {
