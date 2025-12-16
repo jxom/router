@@ -29,11 +29,11 @@ export function mdxRouteGen(): GeneratorPlugin<RouteNode> {
       let imports: Array<ImportDeclaration> = []
 
       // Add imports for MDX components
-      for (const n of mdxNodes) {
+      for (const node of mdxNodes) {
         const importPath = replaceBackslash(
           path.relative(
             path.dirname(config.generatedRouteTree),
-            path.resolve(config.routesDirectory, n.filePath),
+            path.resolve(config.routesDirectory, node.filePath),
           ),
         )
         imports.push({
@@ -41,7 +41,7 @@ export function mdxRouteGen(): GeneratorPlugin<RouteNode> {
           specifiers: [
             {
               imported: 'default',
-              local: `${n.variableName}RouteComponent`,
+              local: `${node.variableName}RouteComponent`,
             },
           ],
         })
