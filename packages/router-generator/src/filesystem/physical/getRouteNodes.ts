@@ -134,7 +134,7 @@ export async function getRouteNodes(
 
         const isBuiltinRouteFile = fullPath.match(/\.(tsx|ts|jsx|js|vue)$/)
         const plugin = plugins.find(({ matches }) =>
-          matches({ fileName: dirent.name, fullPath, relativePath }),
+          matches?.({ fileName: dirent.name, fullPath, relativePath }),
         )
 
         if (dirent.isDirectory()) {

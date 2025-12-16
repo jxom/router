@@ -47,7 +47,7 @@ export interface GeneratorPlugin<TRouteNode extends RouteNode = RouteNode> {
    * Called during filesystem discovery.
    * @returns whether the file should be handled by this plugin.
    */
-  matches: (opts: {
+  matches?: (opts: {
     fileName: string
     fullPath: string
     relativePath: string
