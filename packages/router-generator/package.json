@@ -54,6 +54,16 @@
         "default": "./dist/cjs/index.cjs"
       }
     },
+    "./plugin/mdx": {
+      "import": {
+        "types": "./dist/esm/plugin/mdx.d.ts",
+        "default": "./dist/esm/plugin/mdx.js"
+      },
+      "require": {
+        "types": "./dist/cjs/plugin/mdx.d.cts",
+        "default": "./dist/cjs/plugin/mdx.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
