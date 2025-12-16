@@ -5,7 +5,7 @@ import type { RouteNode as BaseRouteNode, ImportDeclaration } from '../types'
 
 type RouteNode = BaseRouteNode & {
   _isMdxRoute?: boolean | undefined
-  _siblingMdxFilePath?: string | undefined
+  _siblingMdxFileName?: string | undefined
 }
 
 export function mdxRouteGen(): GeneratorPlugin<RouteNode> {
@@ -16,10 +16,10 @@ export function mdxRouteGen(): GeneratorPlugin<RouteNode> {
       return `.update({ component: ${node.variableName}RouteComponent })`
     },
     getTemplateContext({ node, context }) {
-      if (!node._siblingMdxFilePath) return context
+      if (!node._siblingMdxFileName) return context
       return {
         ...context,
-        routeComponentFileName: path.basename(node._siblingMdxFilePath),
+        routeComponentFileName: path.basename(node._siblingMdxFileName),
       }
     },
     getRouteTreeNodes({ routeNodes, config }) {
@@ -73,7 +73,7 @@ export function mdxRouteGen(): GeneratorPlugin<RouteNode> {
         if (!node._isMdxRoute) {
           const base = removeExt(node.filePath)
           if (mdxBases.has(base)) {
-            node._siblingMdxFilePath = `${base}.mdx`
+            node._siblingMdxFileName = `${base}.mdx`
           }
         }
       }
