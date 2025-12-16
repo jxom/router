@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { removeExt, replaceBackslash } from '../utils'
-import type { GeneratorPlugin } from '../plugin/types'
+import type { GeneratorPlugin } from './types'
 import type { RouteNode as BaseRouteNode, ImportDeclaration } from '../types'
 
 type RouteNode = BaseRouteNode & {
@@ -8,7 +8,7 @@ type RouteNode = BaseRouteNode & {
   _siblingMdxFilePath?: string | undefined
 }
 
-export function mdxPlugin(): GeneratorPlugin<RouteNode> {
+export function mdxRouteGen(): GeneratorPlugin<RouteNode> {
   return {
     name: 'mdx',
     extendRouteNodeExpression({ node }) {
