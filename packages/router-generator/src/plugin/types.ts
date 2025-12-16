@@ -12,19 +12,17 @@ export interface GeneratorPlugin<TRouteNode extends RouteNode = RouteNode> {
     prevNode: RouteNode | undefined
   }) => void
   /**
-   * Per-node route-tree customization. Handlers can append chained calls
-   * or additional expressions to a node's route expression.
-   *
-   * Return additional code to append, or `undefined` to keep the default.
+   * Append additional expressions to a node's route expression.
+   * @returns additional code to append.
    */
-  extendRouteNodeExpression?: (opts: {
+  appendRouteNodeExpression?: (opts: {
     node: TRouteNode
     acc: HandleNodeAccumulator
     config: Config
   }) => string | void
   /**
    * Get or modify the template context for this node.
-   * Return an updated context to customize template variables available during scaffolding.
+   * @returns updated context to customize template variables available during scaffolding.
    */
   getTemplateContext?: (opts: {
     node: TRouteNode
@@ -33,7 +31,7 @@ export interface GeneratorPlugin<TRouteNode extends RouteNode = RouteNode> {
   }) => TemplateContext
   /**
    * Called once per route-tree generation.
-   * Return imports and/or modified route nodes to customize the generated route tree.
+   * @returns imports and/or modified route nodes to customize the generated route tree.
    */
   getRouteTreeNodes?: (opts: {
     routeNodes: Array<TRouteNode>
@@ -45,8 +43,9 @@ export interface GeneratorPlugin<TRouteNode extends RouteNode = RouteNode> {
   } | void
   init?: (opts: { generator: Generator }) => void
   /**
-   * Decide if this file should be handled by this handler.
+   * Decide if this file should be handled by this plugin.
    * Called during filesystem discovery.
+   * @returns whether the file should be handled by this plugin.
    */
   matches: (opts: {
     fileName: string
@@ -56,7 +55,7 @@ export interface GeneratorPlugin<TRouteNode extends RouteNode = RouteNode> {
   name: string
   /**
    * A base RouteNode has been created for this physical file.
-   * Mutate the node to add metadata (e.g., mark `_isMdxRoute`) or return a modified node.
+   * @returns modified route node to add metadata (e.g., mark `_isMdxRoute`).
    */
   onRouteNodeCreated?: (opts: {
     node: TRouteNode
@@ -64,8 +63,7 @@ export interface GeneratorPlugin<TRouteNode extends RouteNode = RouteNode> {
   }) => TRouteNode | void
   /**
    * All RouteNodes from the filesystem are known, but not yet turned into a tree.
-   * Mutate `routeNodes` in-place (add/remove/annotate) or return a modified array
-   * to apply cross-file adjustments (e.g., MDX/TSX sibling precedence rules).
+   * @returns modified route nodes to apply cross-file adjustments (e.g., MDX/TSX sibling precedence rules).
    */
   onRouteNodesFinalized?: (opts: {
     routeNodes: Array<TRouteNode>
@@ -80,8 +78,7 @@ export interface GeneratorPlugin<TRouteNode extends RouteNode = RouteNode> {
   /**
    * Customize how modules for this file type are imported when used
    * as components in the route tree.
-   *
-   * Return overrides; omit to keep defaults.
+   * @returns overrides to the default import path, export name, and keep extension.
    */
   resolveComponentImport?: (opts: {
     config: Config
@@ -101,7 +98,7 @@ export interface GeneratorPlugin<TRouteNode extends RouteNode = RouteNode> {
   } | void
   /**
    * Decide whether to run the `transform()` step on this node.
-   * Return false to skip transformation.
+   * @returns whether to transform the file.
    */
   shouldTransformFile?: (opts: { node: TRouteNode }) => boolean
 }

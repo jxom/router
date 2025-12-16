@@ -11,7 +11,7 @@ type RouteNode = BaseRouteNode & {
 export function mdxRouteGen(): GeneratorPlugin<RouteNode> {
   return {
     name: 'mdx',
-    extendRouteNodeExpression({ node }) {
+    appendRouteNodeExpression({ node }) {
       if (!node._isMdxRoute) return
       return `.update({ component: ${node.variableName}RouteComponent })`
     },

@@ -792,7 +792,7 @@ export class Generator {
             : '',
           // Let plugins extend the route expression (e.g., MDX adds .update({ component: ... }))
           ...this.plugins
-            .map((h) => h.extendRouteNodeExpression?.({ node, acc, config }))
+            .map((h) => h.appendRouteNodeExpression?.({ node, acc, config }))
             .filter(Boolean),
         ].join(''),
       ].join('\n\n')
