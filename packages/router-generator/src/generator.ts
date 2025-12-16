@@ -160,6 +160,11 @@ interface CrawlingResult {
   acc: HandleNodeAccumulator
 }
 
+export type TemplateContext = {
+  routeComponentFileName?: string
+  routePath: string
+}
+
 export class Generator {
   /**
    * why do we have two caches for the route files?
@@ -532,6 +537,61 @@ export class Generator {
     this.routeNodeShadowCache = new Map()
   }
 
+  private resolveComponentImport(opts: {
+    config: Config
+    defaultExportName: string
+    node: RouteNode
+    usage:
+      | 'route.component'
+      | 'route.errorComponent'
+      | 'route.notFoundComponent'
+      | 'route.pendingComponent'
+      | 'root.component'
+      | 'lazy.component'
+  }): { importPath: string; exportName: string; keepExtension: boolean } {
+    const { config, defaultExportName, node, usage } = opts
+    // Default: Vue files use 'default' export and keep extension
+    const isVueFile = node.filePath.endsWith('.vue')
+    let resolved = {
+      importPath: replaceBackslash(
+        removeExt(
+          path.relative(
+            path.dirname(config.generatedRouteTree),
+            path.resolve(config.routesDirectory, node.filePath),
+          ),
+          config.addExtensions,
+        ),
+      ),
+      exportName: isVueFile ? 'default' : defaultExportName,
+      keepExtension: isVueFile,
+    }
+
+    // Let plugins override import resolution
+    for (const plugin of this.plugins) {
+      const override = plugin.resolveComponentImport?.({
+        node,
+        usage,
+        defaultExportName: resolved.exportName,
+        config,
+      })
+      if (override) {
+        resolved = { ...resolved, ...override }
+      }
+    }
+
+    // If keepExtension was set, recalculate import path with extension
+    if (resolved.keepExtension) {
+      resolved.importPath = replaceBackslash(
+        path.relative(
+          path.dirname(config.generatedRouteTree),
+          path.resolve(config.routesDirectory, node.filePath),
+        ),
+      )
+    }
+
+    return resolved
+  }
+
   public buildRouteTree(opts: {
     rootRouteNode: RouteNode
     acc: HandleNodeAccumulator
@@ -549,8 +609,17 @@ export class Generator {
       (d) => d,
     ])
 
+    // Determine which nodes should be treated as virtual (plugins can mark nodes)
+    const isVirtual = (node: RouteNode) => {
+      if (node.isVirtual) return true
+      for (const plugin of this.plugins) {
+        if (plugin.shouldTransformFile?.({ node }) === false) return true
+      }
+      return false
+    }
+
     const routeImports = sortedRouteNodes
-      .filter((d) => !d.isVirtual)
+      .filter((d) => !isVirtual(d))
       .flatMap((node) =>
         getImportForRouteNode(
           node,
@@ -561,7 +630,7 @@ export class Generator {
       )
 
     const virtualRouteNodes = sortedRouteNodes
-      .filter((d) => d.isVirtual)
+      .filter((d) => isVirtual(d))
       .map((node) => {
         return `const ${
           node.variableName
@@ -569,7 +638,8 @@ export class Generator {
       })
 
     const imports: Array<ImportDeclaration> = []
-    if (acc.routeNodes.some((n) => n.isVirtual)) {
+
+    if (acc.routeNodes.some((n) => isVirtual(n))) {
       imports.push({
         specifiers: [{ imported: 'createFileRoute' }],
         source: this.targetTemplate.fullPkg,
@@ -630,6 +700,17 @@ export class Generator {
       }
     }
 
+    const pluginRouteNodes: Array<RouteNode> = []
+    for (const plugin of this.plugins) {
+      const result = plugin.getRouteTreeNodes?.({
+        routeNodes: sortedRouteNodes,
+        acc,
+        config,
+      })
+      if (result?.imports) imports.push(...result.imports)
+      if (result?.routeNodes) pluginRouteNodes.push(...result.routeNodes)
+    }
+
     const routeTreeConfig = buildRouteTreeConfig(
       acc.routeTree,
       config.disableTypes,
@@ -683,66 +764,36 @@ export class Generator {
                 )
                   .filter((d) => d[1])
                   .map((d) => {
-                    // For .vue files, use 'default' as the export name since Vue SFCs export default
-                    const isVueFile = d[1]!.filePath.endsWith('.vue')
-                    const exportName = isVueFile ? 'default' : d[0]
-                    // Keep .vue extension for Vue files since Vite requires it
-                    const importPath = replaceBackslash(
-                      isVueFile
-                        ? path.relative(
-                            path.dirname(config.generatedRouteTree),
-                            path.resolve(
-                              config.routesDirectory,
-                              d[1]!.filePath,
-                            ),
-                          )
-                        : removeExt(
-                            path.relative(
-                              path.dirname(config.generatedRouteTree),
-                              path.resolve(
-                                config.routesDirectory,
-                                d[1]!.filePath,
-                              ),
-                            ),
-                            config.addExtensions,
-                          ),
-                    )
+                    const resolved = this.resolveComponentImport({
+                      config,
+                      defaultExportName: d[0],
+                      node: d[1]!,
+                      usage: `route.${d[0]}` as const,
+                    })
                     return `${
                       d[0]
-                    }: lazyRouteComponent(() => import('./${importPath}'), '${exportName}')`
+                    }: lazyRouteComponent(() => import('./${resolved.importPath}'), '${resolved.exportName}')`
                   })
                   .join('\n,')}
               })`
             : '',
           lazyComponentNode
             ? (() => {
-                // For .vue files, use 'default' export since Vue SFCs export default
-                const isVueFile = lazyComponentNode.filePath.endsWith('.vue')
-                const exportAccessor = isVueFile ? 'd.default' : 'd.Route'
-                // Keep .vue extension for Vue files since Vite requires it
-                const importPath = replaceBackslash(
-                  isVueFile
-                    ? path.relative(
-                        path.dirname(config.generatedRouteTree),
-                        path.resolve(
-                          config.routesDirectory,
-                          lazyComponentNode.filePath,
-                        ),
-                      )
-                    : removeExt(
-                        path.relative(
-                          path.dirname(config.generatedRouteTree),
-                          path.resolve(
-                            config.routesDirectory,
-                            lazyComponentNode.filePath,
-                          ),
-                        ),
-                        config.addExtensions,
-                      ),
-                )
-                return `.lazy(() => import('./${importPath}').then((d) => ${exportAccessor}))`
+                const resolved = this.resolveComponentImport({
+                  config,
+                  defaultExportName: 'Route',
+                  node: lazyComponentNode,
+                  usage: 'lazy.component',
+                })
+                const exportAccessor =
+                  resolved.exportName === 'default' ? 'd.default' : 'd.Route'
+                return `.lazy(() => import('./${resolved.importPath}').then((d) => ${exportAccessor}))`
               })()
             : '',
+          // Let plugins extend the route expression (e.g., MDX adds .update({ component: ... }))
+          ...this.plugins
+            .map((h) => h.extendRouteNodeExpression?.({ node, acc, config }))
+            .filter(Boolean),
         ].join(''),
       ].join('\n\n')
     })
@@ -780,28 +831,13 @@ export class Generator {
               )
                 .filter((d) => d[1])
                 .map((d) => {
-                  // For .vue files, use 'default' as the export name since Vue SFCs export default
-                  const isVueFile = d[1]!.filePath.endsWith('.vue')
-                  const exportName = isVueFile ? 'default' : d[0]
-                  // Keep .vue extension for Vue files since Vite requires it
-                  const importPath = replaceBackslash(
-                    isVueFile
-                      ? path.relative(
-                          path.dirname(config.generatedRouteTree),
-                          path.resolve(config.routesDirectory, d[1]!.filePath),
-                        )
-                      : removeExt(
-                          path.relative(
-                            path.dirname(config.generatedRouteTree),
-                            path.resolve(
-                              config.routesDirectory,
-                              d[1]!.filePath,
-                            ),
-                          ),
-                          config.addExtensions,
-                        ),
-                  )
-                  return `${d[0]}: lazyRouteComponent(() => import('./${importPath}'), '${exportName}')`
+                  const resolved = this.resolveComponentImport({
+                    config,
+                    defaultExportName: d[0],
+                    node: d[1]!,
+                    usage: `root.${d[0]}` as 'root.component',
+                  })
+                  return `${d[0]}: lazyRouteComponent(() => import('./${resolved.importPath}'), '${resolved.exportName}')`
                 })
                 .join('\n,')}
             })`
@@ -954,6 +990,7 @@ ${acc.routeTree.map((child) => `${child.variableName}Route: typeof ${getResolved
       [...importStatements].join('\n'),
       mergeImportDeclarations(routeImports).map(buildImportString).join('\n'),
       virtualRouteNodes.join('\n'),
+      pluginRouteNodes.join('\n'),
       createUpdateRoutes.join('\n'),
       fileRoutesByFullPath,
       fileRoutesByPathInterface,
@@ -1005,9 +1042,30 @@ ${acc.routeTree.map((child) => `${child.variableName}Route: typeof ${getResolved
     let shouldWriteRouteFile = false
     let shouldWriteTree = false
     // now we need to either scaffold the file or transform it
-    if (!existingRouteFile.fileContent) {
+    // Check if plugins want to skip scaffolding for this file type
+    const skipScaffold = this.plugins.some(
+      (h) => h.shouldTransformFile?.({ node }) === false,
+    )
+
+    if (!existingRouteFile.fileContent && !skipScaffold) {
       shouldWriteRouteFile = true
       shouldWriteTree = true
+
+      // Build scaffolding context, let plugins extend it
+      let templateContext: TemplateContext = {
+        routePath: escapedRoutePath.replaceAll(/\{(.+?)\}/gm, '$1'),
+      }
+      for (const plugin of this.plugins) {
+        templateContext = {
+          ...templateContext,
+          ...plugin.getTemplateContext?.({
+            node,
+            context: templateContext,
+            config: this.config,
+          }),
+        }
+      }
+
       // Creating a new lazy route file
       if (node._fsRouteType === 'lazy') {
         const tLazyRouteTemplate = this.targetTemplate.lazyRoute
@@ -1019,11 +1077,14 @@ ${acc.routeTree.map((child) => `${child.variableName}Route: typeof ${getResolved
             this.config.customScaffolding?.routeTemplate) ??
             tLazyRouteTemplate.template(),
           {
-            tsrImports: tLazyRouteTemplate.imports.tsrImports(),
+            tsrImports: tLazyRouteTemplate.imports.tsrImports(templateContext),
             tsrPath: escapedRoutePath.replaceAll(/\{(.+?)\}/gm, '$1'),
             tsrExportStart:
               tLazyRouteTemplate.imports.tsrExportStart(escapedRoutePath),
             tsrExportEnd: tLazyRouteTemplate.imports.tsrExportEnd(),
+            tsrComponent: templateContext.routeComponentFileName
+              ? ''
+              : tLazyRouteTemplate.imports.tsrComponent(templateContext),
           },
         )
       } else if (
@@ -1047,11 +1108,14 @@ ${acc.routeTree.map((child) => `${child.variableName}Route: typeof ${getResolved
           this.config.customScaffolding?.routeTemplate ??
             tRouteTemplate.template(),
           {
-            tsrImports: tRouteTemplate.imports.tsrImports(),
+            tsrImports: tRouteTemplate.imports.tsrImports(templateContext),
             tsrPath: escapedRoutePath.replaceAll(/\{(.+?)\}/gm, '$1'),
             tsrExportStart:
               tRouteTemplate.imports.tsrExportStart(escapedRoutePath),
             tsrExportEnd: tRouteTemplate.imports.tsrExportEnd(),
+            tsrComponent: templateContext.routeComponentFileName
+              ? ''
+              : tRouteTemplate.imports.tsrComponent(templateContext),
           },
         )
       } else {
@@ -1059,11 +1123,14 @@ ${acc.routeTree.map((child) => `${child.variableName}Route: typeof ${getResolved
       }
     }
 
-    // Check if this is a Vue component file
+    // Check if this is a Vue component file or plugin-handled file that needs to be transformed.
     // Vue SFC files (.vue) don't need transformation as they can't have a Route export
     const isVueFile = node.filePath.endsWith('.vue')
+    const shouldTransform = this.plugins.every(
+      (h) => h.shouldTransformFile?.({ node }),
+    )
 
-    if (!isVueFile) {
+    if (!isVueFile && shouldTransform) {
       // transform the file
       const transformResult = await transform({
         source: updatedCacheEntry.fileContent,
@@ -1314,6 +1381,9 @@ ${acc.routeTree.map((child) => `${child.variableName}Route: typeof ${getResolved
           tsrPath: rootPathId,
           tsrExportStart: rootTemplate.imports.tsrExportStart(),
           tsrExportEnd: rootTemplate.imports.tsrExportEnd(),
+          tsrComponent: rootTemplate.imports.tsrComponent({
+            routePath: rootPathId,
+          }),
         },
       )
 

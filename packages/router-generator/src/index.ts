@@ -11,6 +11,8 @@ export type { FileEventType, FileEvent, GeneratorEvent } from './generator'
 
 export type { GeneratorPlugin } from './plugin/types'
 
+export { mdxPlugin } from './plugins/mdx'
+
 export {
   capitalize,
   cleanPath,
