@@ -60,7 +60,7 @@ export function mdxRouteGen(): GeneratorPlugin<RouteNode> {
         _isMdxRoute: true,
       }
     },
-    onRouteNodesFinalized({ routeNodes: nodes }) {
+    getRouteNodes({ routeNodes: nodes }) {
       const routeNodes = [...nodes]
 
       const mdxBases = new Set(

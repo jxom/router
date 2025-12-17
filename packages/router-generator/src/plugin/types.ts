@@ -63,9 +63,10 @@ export interface GeneratorPlugin<TRouteNode extends RouteNode = RouteNode> {
   }) => TRouteNode | void
   /**
    * All RouteNodes from the filesystem are known, but not yet turned into a tree.
-   * @returns modified route nodes to apply cross-file adjustments (e.g., MDX/TSX sibling precedence rules).
+   * @returns route nodes
    */
-  onRouteNodesFinalized?: (opts: {
+  getRouteNodes?: (opts: {
+    rootPathId: string
     routeNodes: Array<TRouteNode>
     config: Config
   }) => Array<TRouteNode> | void

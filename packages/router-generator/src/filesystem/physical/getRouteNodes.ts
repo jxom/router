@@ -261,9 +261,10 @@ export async function getRouteNodes(
   // Let plugins do cross-file adjustments (e.g., sibling file precedence)
   for (const plugin of plugins) {
     routeNodes =
-      plugin.onRouteNodesFinalized?.({
-        routeNodes,
+      plugin.getRouteNodes?.({
         config: config as Config,
+        rootPathId,
+        routeNodes,
       }) ?? routeNodes
   }
 
