@@ -27,6 +27,7 @@ export function isVirtualConfigFile(fileName: string): boolean {
 export async function getRouteNodes(
   config: Pick<
     Config,
+    | 'plugins'
     | 'routesDirectory'
     | 'routeFilePrefix'
     | 'routeFileIgnorePrefix'
@@ -38,13 +39,17 @@ export async function getRouteNodes(
   >,
   root: string,
 ): Promise<GetRouteNodesResult> {
-  const { routeFilePrefix, routeFileIgnorePrefix, routeFileIgnorePattern } =
-    config
+  const {
+    plugins = [],
+    routeFilePrefix,
+    routeFileIgnorePrefix,
+    routeFileIgnorePattern,
+  } = config
 
   const logger = logging({ disabled: config.disableLogging })
   const routeFileIgnoreRegExp = new RegExp(routeFileIgnorePattern ?? '', 'g')
 
-  const routeNodes: Array<RouteNode> = []
+  let routeNodes: Array<RouteNode> = []
   const allPhysicalDirectories: Array<string> = []
 
   async function recurse(dir: string) {
@@ -127,9 +132,14 @@ export async function getRouteNodes(
         const fullPath = replaceBackslash(path.join(fullDir, dirent.name))
         const relativePath = path.posix.join(dir, dirent.name)
 
+        const isBuiltinRouteFile = fullPath.match(/\.(tsx|ts|jsx|js|vue)$/)
+        const plugin = plugins.find(({ matches }) =>
+          matches?.({ fileName: dirent.name, fullPath, relativePath }),
+        )
+
         if (dirent.isDirectory()) {
           await recurse(relativePath)
-        } else if (fullPath.match(/\.(tsx|ts|jsx|js|vue)$/)) {
+        } else if (isBuiltinRouteFile || plugin) {
           const filePath = replaceBackslash(path.join(dir, dirent.name))
           const filePathNoExt = removeExt(filePath)
           const {
@@ -170,10 +180,10 @@ export async function getRouteNodes(
             routeType = 'pathless_layout'
           }
 
-          // Only show deprecation warning for .tsx/.ts files, not .vue files
+          // Only show deprecation warning for .tsx/.ts files, not .vue or plugin-handled files
           // Vue files using .component.vue is the Vue-native way
           const isVueFile = filePath.endsWith('.vue')
-          if (!isVueFile) {
+          if (!isVueFile && !plugin) {
             ;(
               [
                 ['component', 'component'],
@@ -222,7 +232,7 @@ export async function getRouteNodes(
               '/',
             ) || '/'
 
-          routeNodes.push({
+          let node: RouteNode = {
             filePath,
             fullPath,
             routePath,
@@ -230,7 +240,15 @@ export async function getRouteNodes(
             _fsRouteType: routeType,
             _isExperimentalNonNestedRoute: isExperimentalNonNestedRoute,
             originalRoutePath,
-          })
+          }
+
+          node =
+            plugin?.onRouteNodeCreated?.({
+              node,
+              config: config as Config,
+            }) ?? node
+
+          routeNodes.push(node)
         }
       }),
     )
@@ -239,6 +257,16 @@ export async function getRouteNodes(
   }
 
   await recurse('./')
+
+  // Let plugins do cross-file adjustments (e.g., sibling file precedence)
+  for (const plugin of plugins) {
+    routeNodes =
+      plugin.getRouteNodes?.({
+        config: config as Config,
+        rootPathId,
+        routeNodes,
+      }) ?? routeNodes
+  }
 
   // Find the root route node - prefer the actual route file over component/loader files
   const rootRouteNode =

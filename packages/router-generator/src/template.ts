@@ -1,7 +1,13 @@
 import { format } from './utils'
 import type { Config } from './config'
+import { TemplateContext } from './generator'
 
-type TemplateTag = 'tsrImports' | 'tsrPath' | 'tsrExportStart' | 'tsrExportEnd'
+type TemplateTag =
+  | 'tsrImports'
+  | 'tsrPath'
+  | 'tsrExportStart'
+  | 'tsrExportEnd'
+  | 'tsrComponent'
 
 export function fillTemplate(
   config: Config,
@@ -24,22 +30,25 @@ export type TargetTemplate = {
       tsrImports: () => string
       tsrExportStart: () => string
       tsrExportEnd: () => string
+      tsrComponent: (context: TemplateContext) => string
     }
   }
   route: {
     template: () => string
     imports: {
-      tsrImports: () => string
+      tsrImports: (context: TemplateContext) => string
       tsrExportStart: (routePath: string) => string
       tsrExportEnd: () => string
+      tsrComponent: (context: TemplateContext) => string
     }
   }
   lazyRoute: {
     template: () => string
     imports: {
-      tsrImports: () => string
+      tsrImports: (context: TemplateContext) => string
       tsrExportStart: (routePath: string) => string
       tsrExportEnd: () => string
+      tsrComponent: (context: TemplateContext) => string
     }
   }
 }
@@ -58,13 +67,15 @@ export function getTargetTemplate(config: Config): TargetTemplate {
               '%%tsrImports%%',
               '\n\n',
               '%%tsrExportStart%%{\n component: RootComponent\n }%%tsrExportEnd%%\n\n',
-              'function RootComponent() { return (<React.Fragment><div>Hello "%%tsrPath%%"!</div><Outlet /></React.Fragment>) };\n',
+              '%%tsrComponent%%\n',
             ].join(''),
           imports: {
             tsrImports: () =>
               "import { Outlet, createRootRoute } from '@tanstack/react-router';",
             tsrExportStart: () => 'export const Route = createRootRoute(',
             tsrExportEnd: () => ');',
+            tsrComponent: ({ routePath }) =>
+              `function RootComponent() { return (<React.Fragment><div>Hello "${routePath}"!</div><Outlet /></React.Fragment>) }`,
           },
         },
         route: {
@@ -73,18 +84,27 @@ export function getTargetTemplate(config: Config): TargetTemplate {
               '%%tsrImports%%',
               '\n\n',
               '%%tsrExportStart%%{\n component: RouteComponent\n }%%tsrExportEnd%%\n\n',
-              'function RouteComponent() { return <div>Hello "%%tsrPath%%"!</div> };\n',
+              '%%tsrComponent%%\n',
             ].join(''),
           imports: {
-            tsrImports: () =>
-              config.verboseFileRoutes === false
-                ? ''
-                : "import { createFileRoute } from '@tanstack/react-router';",
+            tsrImports: ({ routeComponentFileName }) => {
+              const defaultImport =
+                config.verboseFileRoutes === false
+                  ? ''
+                  : "import { createFileRoute } from '@tanstack/react-router';"
+              return [
+                defaultImport,
+                `${routeComponentFileName ? `import RouteComponent from './${routeComponentFileName}';` : ''}`,
+              ].join('\n')
+            },
             tsrExportStart: (routePath) =>
               config.verboseFileRoutes === false
                 ? 'export const Route = createFileRoute('
                 : `export const Route = createFileRoute('${routePath}')(`,
             tsrExportEnd: () => ');',
+            tsrComponent: ({ routePath }) => {
+              return `function RouteComponent() { return <div>Hello "${routePath}"!</div> }`
+            },
           },
         },
         lazyRoute: {
@@ -93,18 +113,27 @@ export function getTargetTemplate(config: Config): TargetTemplate {
               '%%tsrImports%%',
               '\n\n',
               '%%tsrExportStart%%{\n component: RouteComponent\n }%%tsrExportEnd%%\n\n',
-              'function RouteComponent() { return <div>Hello "%%tsrPath%%"!</div> };\n',
+              '%%tsrComponent%%\n',
             ].join(''),
           imports: {
-            tsrImports: () =>
-              config.verboseFileRoutes === false
-                ? ''
-                : "import { createLazyFileRoute } from '@tanstack/react-router';",
+            tsrImports: ({ routeComponentFileName }) => {
+              const defaultImport =
+                config.verboseFileRoutes === false
+                  ? ''
+                  : "import { createLazyFileRoute } from '@tanstack/react-router';"
+              return [
+                defaultImport,
+                `${routeComponentFileName ? `import RouteComponent from './${routeComponentFileName}';` : ''}`,
+              ].join('\n')
+            },
             tsrExportStart: (routePath) =>
               config.verboseFileRoutes === false
                 ? 'export const Route = createLazyFileRoute('
                 : `export const Route = createLazyFileRoute('${routePath}')(`,
             tsrExportEnd: () => ');',
+            tsrComponent: ({ routePath }) => {
+              return `function RouteComponent() { return <div>Hello "${routePath}"!</div> }`
+            },
           },
         },
       }
@@ -119,13 +148,15 @@ export function getTargetTemplate(config: Config): TargetTemplate {
               '%%tsrImports%%',
               '\n\n',
               '%%tsrExportStart%%{\n component: RootComponent\n }%%tsrExportEnd%%\n\n',
-              'function RootComponent() { return (<><div>Hello "%%tsrPath%%"!</div><Outlet /></>) };\n',
+              '%%tsrComponent%%\n',
             ].join(''),
           imports: {
             tsrImports: () =>
               "import { Outlet, createRootRoute } from '@tanstack/solid-router';",
             tsrExportStart: () => 'export const Route = createRootRoute(',
             tsrExportEnd: () => ');',
+            tsrComponent: ({ routePath }) =>
+              `function RootComponent() { return (<><div>Hello "${routePath}"!</div><Outlet /></>) }`,
           },
         },
         route: {
@@ -134,18 +165,27 @@ export function getTargetTemplate(config: Config): TargetTemplate {
               '%%tsrImports%%',
               '\n\n',
               '%%tsrExportStart%%{\n component: RouteComponent\n }%%tsrExportEnd%%\n\n',
-              'function RouteComponent() { return <div>Hello "%%tsrPath%%"!</div> };\n',
+              '%%tsrComponent%%\n',
             ].join(''),
           imports: {
-            tsrImports: () =>
-              config.verboseFileRoutes === false
-                ? ''
-                : "import { createFileRoute } from '@tanstack/solid-router';",
+            tsrImports: ({ routeComponentFileName }) => {
+              const defaultImport =
+                config.verboseFileRoutes === false
+                  ? ''
+                  : "import { createFileRoute } from '@tanstack/solid-router';"
+              return [
+                defaultImport,
+                `${routeComponentFileName ? `import RouteComponent from './${routeComponentFileName}';` : ''}`,
+              ].join('\n')
+            },
             tsrExportStart: (routePath) =>
               config.verboseFileRoutes === false
                 ? 'export const Route = createFileRoute('
                 : `export const Route = createFileRoute('${routePath}')(`,
             tsrExportEnd: () => ');',
+            tsrComponent: ({ routePath }) => {
+              return `function RouteComponent() { return <div>Hello "${routePath}"!</div> }`
+            },
           },
         },
         lazyRoute: {
@@ -154,13 +194,19 @@ export function getTargetTemplate(config: Config): TargetTemplate {
               '%%tsrImports%%',
               '\n\n',
               '%%tsrExportStart%%{\n component: RouteComponent\n }%%tsrExportEnd%%\n\n',
-              'function RouteComponent() { return <div>Hello "%%tsrPath%%"!</div> };\n',
+              '%%tsrComponent%%\n',
             ].join(''),
           imports: {
-            tsrImports: () =>
-              config.verboseFileRoutes === false
-                ? ''
-                : "import { createLazyFileRoute } from '@tanstack/solid-router';",
+            tsrImports: ({ routeComponentFileName }) => {
+              const defaultImport =
+                config.verboseFileRoutes === false
+                  ? ''
+                  : "import { createLazyFileRoute } from '@tanstack/solid-router';"
+              return [
+                defaultImport,
+                `${routeComponentFileName ? `import RouteComponent from './${routeComponentFileName}';` : ''}`,
+              ].join('\n')
+            },
 
             tsrExportStart: (routePath) =>
               config.verboseFileRoutes === false
@@ -168,6 +214,9 @@ export function getTargetTemplate(config: Config): TargetTemplate {
                 : `export const Route = createLazyFileRoute('${routePath}')(`,
 
             tsrExportEnd: () => ');',
+            tsrComponent: ({ routePath }) => {
+              return `function RouteComponent() { return <div>Hello "${routePath}"!</div> }`
+            },
           },
         },
       }
@@ -182,13 +231,15 @@ export function getTargetTemplate(config: Config): TargetTemplate {
               '%%tsrImports%%',
               '\n\n',
               '%%tsrExportStart%%{\n component: RootComponent\n }%%tsrExportEnd%%\n\n',
-              'function RootComponent() { return h("div", {}, ["Hello \\"%%tsrPath%%\\"!", h(Outlet)]) };\n',
+              '%%tsrComponent%%\n',
             ].join(''),
           imports: {
             tsrImports: () =>
               "import { Outlet, createRootRoute } from '@tanstack/vue-router';",
             tsrExportStart: () => 'export const Route = createRootRoute(',
             tsrExportEnd: () => ');',
+            tsrComponent: ({ routePath }) =>
+              `function RootComponent() { return h("div", {}, ["Hello \\"%%tsrPath%%\\"!", h(Outlet)]) }`,
           },
         },
         route: {
@@ -198,7 +249,7 @@ export function getTargetTemplate(config: Config): TargetTemplate {
               '%%tsrImports%%',
               '\n\n',
               '%%tsrExportStart%%{\n component: RouteComponent\n }%%tsrExportEnd%%\n\n',
-              'function RouteComponent() { return h("div", {}, "Hello \\"%%tsrPath%%\\"!") };\n',
+              '%%tsrComponent%%\n',
             ].join(''),
           imports: {
             tsrImports: () =>
@@ -210,6 +261,8 @@ export function getTargetTemplate(config: Config): TargetTemplate {
                 ? 'export const Route = createFileRoute('
                 : `export const Route = createFileRoute('${routePath}')(`,
             tsrExportEnd: () => ');',
+            tsrComponent: ({ routePath }) =>
+              `function RouteComponent() { return h("div", {}, "Hello \\"${routePath}\\"!") }`,
           },
         },
         lazyRoute: {
@@ -219,7 +272,7 @@ export function getTargetTemplate(config: Config): TargetTemplate {
               '%%tsrImports%%',
               '\n\n',
               '%%tsrExportStart%%{\n component: RouteComponent\n }%%tsrExportEnd%%\n\n',
-              'function RouteComponent() { return h("div", {}, "Hello \\"%%tsrPath%%\\"!") };\n',
+              '%%tsrComponent%%\n',
             ].join(''),
           imports: {
             tsrImports: () =>
@@ -233,6 +286,8 @@ export function getTargetTemplate(config: Config): TargetTemplate {
                 : `export const Route = createLazyFileRoute('${routePath}')(`,
 
             tsrExportEnd: () => ');',
+            tsrComponent: ({ routePath }) =>
+              `function RouteComponent() { return h("div", {}, "Hello \\"${routePath}\\"!") }`,
           },
         },
       }
